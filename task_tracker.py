@@ -6,10 +6,10 @@ A clean, standard-library-only CLI task tracker.
 Storage: local JSON file (tasks.json) placed next to this script.
 
 Commands:
-  add <title>        Add a new task
-  list              List tasks
-  done <id>          Mark task as done
-  delete <id>        Delete a task
+  add <title>         Add a new task
+  list [--all]        List tasks (default: pending only)
+  done <id>           Mark task as done
+  delete <id>         Delete a task
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+VERSION = "1.0.0"
 DATA_FILE = Path(__file__).with_name("tasks.json")
 
 
@@ -28,16 +29,23 @@ def now_iso() -> str:
 
 
 def load_tasks() -> list[dict[str, Any]]:
+    """
+    Load tasks from tasks.json.
+    - If file doesn't exist: return empty list.
+    - If corrupted: raise ValueError with a clear fix suggestion.
+    """
     if not DATA_FILE.exists():
         return []
 
     try:
         data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise ValueError("tasks.json is not valid JSON. Fix or delete the file.") from exc
+        raise ValueError(
+            "tasks.json is not valid JSON. Fix the file or delete it to reset."
+        ) from exc
 
     if not isinstance(data, list):
-        raise ValueError("tasks.json must contain a JSON array of tasks.")
+        raise ValueError("tasks.json must contain a JSON array (list) of tasks.")
 
     for item in data:
         if not isinstance(item, dict):
@@ -49,7 +57,10 @@ def load_tasks() -> list[dict[str, Any]]:
 
 
 def save_tasks(tasks: list[dict[str, Any]]) -> None:
-    DATA_FILE.write_text(json.dumps(tasks, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    DATA_FILE.write_text(
+        json.dumps(tasks, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
 
 def next_id(tasks: list[dict[str, Any]]) -> int:
@@ -65,11 +76,25 @@ def find_task(tasks: list[dict[str, Any]], task_id: int) -> dict[str, Any] | Non
     return None
 
 
+def format_task(task: dict[str, Any]) -> str:
+    done = bool(task.get("done"))
+    status = "✅" if done else "⬜"
+    task_id = task.get("id")
+    title = task.get("title", "")
+    return f"{status} [{task_id}] {title}"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="task-tracker",
         description="A simple CLI task tracker (JSON storage).",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {VERSION}",
+    )
+
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     add_parser = subparsers.add_parser("add", help="Add a new task")
@@ -89,11 +114,6 @@ def build_parser() -> argparse.ArgumentParser:
     delete_parser.add_argument("id", type=int, help="Task ID")
 
     return parser
-
-
-def format_task(task: dict[str, Any]) -> str:
-    status = "✅" if task.get("done") else "⬜"
-    return f"{status} [{task.get('id')}] {task.get('title')}"
 
 
 def cmd_add(tasks: list[dict[str, Any]], title: str) -> int:
@@ -117,7 +137,7 @@ def cmd_add(tasks: list[dict[str, Any]], title: str) -> int:
 
 def cmd_list(tasks: list[dict[str, Any]], show_all: bool) -> int:
     if not tasks:
-        print("No tasks yet. Add one with: task-tracker add \"Task title\"")
+        print('No tasks yet. Add one with: python task_tracker.py add "Task title"')
         return 0
 
     visible = tasks if show_all else [t for t in tasks if not t.get("done")]
