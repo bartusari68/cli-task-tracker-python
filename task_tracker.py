@@ -2,19 +2,66 @@
 """
 CLI Task Tracker (Python)
 
-A minimal, standard-library-only CLI skeleton.
-Commands (WIP): add, list, done, delete
+A clean, standard-library-only CLI task tracker.
+Storage: local JSON file (tasks.json) placed next to this script.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+DATA_FILE = Path(__file__).with_name("tasks.json")
+
+
+def now_iso() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def load_tasks() -> list[dict[str, Any]]:
+    """
+    Load tasks from tasks.json.
+    If the file doesn't exist, return an empty list.
+    If the file is corrupted, raise a ValueError with a clear message.
+    """
+    if not DATA_FILE.exists():
+        return []
+
+    try:
+        data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("tasks.json is not valid JSON. Fix or delete the file.") from exc
+
+    if not isinstance(data, list):
+        raise ValueError("tasks.json must contain a JSON array of tasks.")
+
+    # Basic shape validation (lightweight)
+    for item in data:
+        if not isinstance(item, dict):
+            raise ValueError("Each task must be a JSON object.")
+        if "id" not in item or "title" not in item or "done" not in item:
+            raise ValueError("Each task must include: id, title, done.")
+
+    return data
+
+
+def save_tasks(tasks: list[dict[str, Any]]) -> None:
+    DATA_FILE.write_text(json.dumps(tasks, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def next_id(tasks: list[dict[str, Any]]) -> int:
+    if not tasks:
+        return 1
+    return max(int(t["id"]) for t in tasks) + 1
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="task-tracker",
-        description="A simple CLI task tracker (WIP).",
+        description="A simple CLI task tracker (JSON storage).",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -41,7 +88,13 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    # WIP: command handling will be implemented step-by-step
+    try:
+        tasks = load_tasks()
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    # WIP: command handling will be implemented next
     if args.command == "add":
         print("WIP: add command not implemented yet.")
         return 0
@@ -58,7 +111,6 @@ def main() -> int:
         print("WIP: delete command not implemented yet.")
         return 0
 
-    # Should never happen due to required=True
     parser.print_help()
     return 1
 
