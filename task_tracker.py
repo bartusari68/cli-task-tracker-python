@@ -4,6 +4,12 @@ CLI Task Tracker (Python)
 
 A clean, standard-library-only CLI task tracker.
 Storage: local JSON file (tasks.json) placed next to this script.
+
+Commands:
+  add <title>        Add a new task
+  list              List tasks
+  done <id>          Mark task as done
+  delete <id>        Delete a task
 """
 
 from __future__ import annotations
@@ -22,11 +28,6 @@ def now_iso() -> str:
 
 
 def load_tasks() -> list[dict[str, Any]]:
-    """
-    Load tasks from tasks.json.
-    If the file doesn't exist, return an empty list.
-    If the file is corrupted, raise a ValueError with a clear message.
-    """
     if not DATA_FILE.exists():
         return []
 
@@ -38,7 +39,6 @@ def load_tasks() -> list[dict[str, Any]]:
     if not isinstance(data, list):
         raise ValueError("tasks.json must contain a JSON array of tasks.")
 
-    # Basic shape validation (lightweight)
     for item in data:
         if not isinstance(item, dict):
             raise ValueError("Each task must be a JSON object.")
@@ -58,30 +58,105 @@ def next_id(tasks: list[dict[str, Any]]) -> int:
     return max(int(t["id"]) for t in tasks) + 1
 
 
+def find_task(tasks: list[dict[str, Any]], task_id: int) -> dict[str, Any] | None:
+    for t in tasks:
+        if int(t.get("id", -1)) == task_id:
+            return t
+    return None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="task-tracker",
         description="A simple CLI task tracker (JSON storage).",
     )
-
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # add
     add_parser = subparsers.add_parser("add", help="Add a new task")
     add_parser.add_argument("title", help="Task title")
 
-    # list
-    subparsers.add_parser("list", help="List all tasks")
+    list_parser = subparsers.add_parser("list", help="List tasks")
+    list_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Show all tasks (including completed ones)",
+    )
 
-    # done
     done_parser = subparsers.add_parser("done", help="Mark a task as done")
     done_parser.add_argument("id", type=int, help="Task ID")
 
-    # delete
     delete_parser = subparsers.add_parser("delete", help="Delete a task")
     delete_parser.add_argument("id", type=int, help="Task ID")
 
     return parser
+
+
+def format_task(task: dict[str, Any]) -> str:
+    status = "✅" if task.get("done") else "⬜"
+    return f"{status} [{task.get('id')}] {task.get('title')}"
+
+
+def cmd_add(tasks: list[dict[str, Any]], title: str) -> int:
+    title = title.strip()
+    if not title:
+        print("Error: title cannot be empty.")
+        return 1
+
+    task = {
+        "id": next_id(tasks),
+        "title": title,
+        "done": False,
+        "created_at": now_iso(),
+        "completed_at": None,
+    }
+    tasks.append(task)
+    save_tasks(tasks)
+    print(f"✅ Added: [{task['id']}] {task['title']}")
+    return 0
+
+
+def cmd_list(tasks: list[dict[str, Any]], show_all: bool) -> int:
+    if not tasks:
+        print("No tasks yet. Add one with: task-tracker add \"Task title\"")
+        return 0
+
+    visible = tasks if show_all else [t for t in tasks if not t.get("done")]
+    if not visible:
+        print("All tasks are completed 🎉 (use --all to view history)")
+        return 0
+
+    for t in visible:
+        print(format_task(t))
+    return 0
+
+
+def cmd_done(tasks: list[dict[str, Any]], task_id: int) -> int:
+    task = find_task(tasks, task_id)
+    if task is None:
+        print(f"Error: task with id {task_id} not found.")
+        return 1
+
+    if task.get("done"):
+        print(f"Already done: [{task_id}] {task.get('title')}")
+        return 0
+
+    task["done"] = True
+    task["completed_at"] = now_iso()
+    save_tasks(tasks)
+    print(f"✅ Done: [{task_id}] {task.get('title')}")
+    return 0
+
+
+def cmd_delete(tasks: list[dict[str, Any]], task_id: int) -> int:
+    task = find_task(tasks, task_id)
+    if task is None:
+        print(f"Error: task with id {task_id} not found.")
+        return 1
+
+    tasks.remove(task)
+    save_tasks(tasks)
+    print(f"🗑️ Deleted: [{task_id}] {task.get('title')}")
+    return 0
 
 
 def main() -> int:
@@ -94,22 +169,17 @@ def main() -> int:
         print(f"Error: {exc}")
         return 1
 
-    # WIP: command handling will be implemented next
     if args.command == "add":
-        print("WIP: add command not implemented yet.")
-        return 0
+        return cmd_add(tasks, args.title)
 
     if args.command == "list":
-        print("WIP: list command not implemented yet.")
-        return 0
+        return cmd_list(tasks, args.all)
 
     if args.command == "done":
-        print("WIP: done command not implemented yet.")
-        return 0
+        return cmd_done(tasks, args.id)
 
     if args.command == "delete":
-        print("WIP: delete command not implemented yet.")
-        return 0
+        return cmd_delete(tasks, args.id)
 
     parser.print_help()
     return 1
