@@ -27,10 +27,22 @@ Focused on **discipline**, **readable code**, and a **realistic mini-project wor
 
 ---
 
-## 📦 Usage
-```bash
-python task_tracker.py add "Buy milk"
-python task_tracker.py list
-python task_tracker.py list --all
-python task_tracker.py done 1
-python task_tracker.py delete 1
+## 📦 Usage + 🖥️ Example Output
+```console
+$ python task_tracker.py add "Buy milk"
+✅ Added: [1] Buy milk
+
+$ python task_tracker.py list
+⬜ [1] Buy milk
+
+$ python task_tracker.py done 1
+✅ Done: [1] Buy milk
+
+$ python task_tracker.py list
+All tasks are completed 🎉 (use --all to view history)
+
+$ python task_tracker.py list --all
+✅ [1] Buy milk
+
+$ python task_tracker.py delete 1
+🗑️ Deleted: [1] Buy milk
